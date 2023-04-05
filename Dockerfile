@@ -1,35 +1,29 @@
-FROM haskell:9.4 as builder
+# Use the official Haskell image as the base image
+FROM haskell:9.4 AS builder
 
-WORKDIR /build
+# Install the necessary dependencies
+RUN apt-get update && \
+    apt-get install -y git
 
-# Install dependencies
-RUN apt-get update
-RUN apt-get install -y libgmp-dev \
-                       zlib1g-dev \
-                       libpq-dev \
-                       libtinfo-dev \
-                       libsodium-dev \
-                       libpq5 \
-                       pkg-config \
-                       build-essential \
-                       liblzma-dev
+# Set the working directory to /app
+WORKDIR /app
 
-# Copy cabal files
-COPY *.cabal /build/
+# Copy the Cabal file and the source code to the container
+COPY . .
 
-USER root
+# Build the executable using Cabal
+RUN cabal update && \
+    cabal build
 
-RUN cabal v2-update
+# Set the base image to Debian Buster slim
+FROM debian:buster-slim
 
-RUN cabal v2-install cabal-plan --constraint='cabal-plan +exe'
+# Install any runtime dependencies
+RUN apt-get update && \
+    apt-get install -y libgmp-dev
 
-# Build only dependencies so they can be cached
-RUN cabal v2-build -v1 --dependencies-only hs-docker-image
+# Copy the executable from the previous build stage
+COPY --from=builder /app/dist-newstyle/build/x86_64-linux/ghc-9.4.4/hs-docker-image-0.1.0.0/x/hs-docker-image/build/hs-docker-image/hs-docker-image .
 
-COPY . /build
-
-RUN cabal build
-
-RUN mkdir -p /build/artifacts && cp $(cabal-plan list-bin hs-docker-image) /build/artifacts/
-
-ENTRYPOINT ["/build/artifacts/hs-docker-image"]
+# Set the command to run when the container starts
+CMD ["./hs-docker-image"]
